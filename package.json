@@ -5,9 +5,11 @@
   "description": "GitStory Phase 1: Repository Explorer and Commit History",
   "scripts": {
     "install:all": "cd server && npm install && cd ../client && npm install",
-    "build": "cd server && npm run build && cd ../client && npm run build",
-    "server": "cd server && npm run dev",
-    "client": "cd client && npm run dev",
+    "build": "npm --prefix client run build",
+    "vercel-build": "npm --prefix client run build",
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
     "test": "npm --prefix server test"
   }
 }
+
