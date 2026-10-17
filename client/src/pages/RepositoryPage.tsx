@@ -21,7 +21,8 @@ import { CommitList } from '../components/CommitList';
 import { CommitDetails } from '../components/CommitDetails';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
-import { ArrowLeft } from 'lucide-react';
+import { GitStoryPlayer } from '../components/GitStoryPlayer';
+import { ArrowLeft, Play } from 'lucide-react';
 
 export const RepositoryPage: React.FC = () => {
   const { owner, repo } = useParams<{ owner: string; repo: string }>();
@@ -31,6 +32,7 @@ export const RepositoryPage: React.FC = () => {
   const [commits, setCommits] = useState<CommitSummary[]>([]);
   const [page, setPage] = useState<number>(1);
   const [hasMore, setHasMore] = useState<boolean>(false);
+  const [isStoryOpen, setIsStoryOpen] = useState<boolean>(false);
 
   // Advanced metadata state
   const [contributorStats, setContributorStats] = useState<ContributorStats | null>(null);
@@ -217,7 +219,7 @@ export const RepositoryPage: React.FC = () => {
 
   return (
     <div className="py-6 space-y-6">
-      {/* Top action bar: back link and compact search */}
+      {/* Top action bar: back link, play story trigger, and compact search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link
           to="/"
@@ -227,13 +229,27 @@ export const RepositoryPage: React.FC = () => {
           <span>Back to Explorer</span>
         </Link>
 
-        <div className="w-full sm:w-80">
-          <RepositorySearch compact />
+        <div className="flex items-center space-x-3 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setIsStoryOpen(true)}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-neutral-900 bg-white hover:bg-neutral-50 border border-neutral-300 rounded shadow-2xs transition-colors cursor-pointer shrink-0"
+            title="Launch interactive repository story trailer"
+          >
+            <Play className="w-3.5 h-3.5 fill-current text-emerald-600" />
+            <span>Play Story Mode</span>
+          </button>
+          <div className="w-full sm:w-80">
+            <RepositorySearch compact />
+          </div>
         </div>
       </div>
 
       {/* 1. Repository Overview Header */}
-      <RepositoryHeader repository={repository} />
+      <RepositoryHeader
+        repository={repository}
+        onOpenStory={() => setIsStoryOpen(true)}
+      />
 
       {/* 2. Contributor Breakdown & Work Share */}
       <ContributorStatsView
@@ -363,6 +379,18 @@ export const RepositoryPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* 6. Interactive GitStory Cinematic Story Player */}
+      <GitStoryPlayer
+        repository={repository}
+        commits={commits}
+        contributors={contributorStats}
+        languages={languages}
+        frequentFiles={frequentFilesData}
+        activity={activity}
+        isOpen={isStoryOpen}
+        onClose={() => setIsStoryOpen(false)}
+      />
     </div>
   );
 };
