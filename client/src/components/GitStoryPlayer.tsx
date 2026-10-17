@@ -5,6 +5,9 @@ import type { ContributorStats } from '../types/contributor';
 import type { LanguageDistribution } from '../types/language';
 import type { FrequentFilesResponse } from '../types/frequentFiles';
 import type { CommitActivityResponse } from '../types/activity';
+import { ParticleMorphCanvas } from './story/ParticleMorphCanvas';
+import { CommitRunner } from './story/CommitRunner';
+import { soundEffects } from './story/SoundEffects';
 import {
   Play,
   Pause,
@@ -12,7 +15,6 @@ import {
   SkipBack,
   SkipForward,
   X,
-  Code,
   GitCommit,
   Users,
   Activity,
@@ -20,10 +22,12 @@ import {
   Copy,
   Check,
   Terminal,
-  Calendar,
   Layers,
   Maximize2,
   Minimize2,
+  Volume2,
+  VolumeX,
+  Gamepad2,
 } from 'lucide-react';
 
 const LANGUAGE_COLORS: Record<string, string> = {
@@ -98,6 +102,8 @@ export const GitStoryPlayer: React.FC<GitStoryPlayerProps> = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [timelineMode, setTimelineMode] = useState<'runner' | 'cards'>('runner');
   const [svgCopied, setSvgCopied] = useState<boolean>(false);
   const [markdownCopied, setMarkdownCopied] = useState<boolean>(false);
 
@@ -196,6 +202,7 @@ export const GitStoryPlayer: React.FC<GitStoryPlayerProps> = ({
 
   // Jump to specific chapter
   const jumpToChapter = (chapterId: ChapterId) => {
+    soundEffects.playBlip();
     let acc = 0;
     for (const ch of chapters) {
       if (ch.id === chapterId) {
@@ -313,6 +320,18 @@ export const GitStoryPlayer: React.FC<GitStoryPlayerProps> = ({
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
+            {/* Audio Toggle */}
+            <button
+              onClick={() => {
+                soundEffects.isMuted = !isMuted;
+                setIsMuted(!isMuted);
+              }}
+              className="p-1.5 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white transition"
+              title={isMuted ? 'Unmute Sound' : 'Mute Sound'}
+            >
+              {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
+            </button>
+
             {/* Speed selector */}
             <div className="inline-flex rounded border border-neutral-800 bg-neutral-900 p-0.5 text-[11px] font-mono">
               {[0.5, 1, 2, 4].map((spd) => (
@@ -372,83 +391,82 @@ export const GitStoryPlayer: React.FC<GitStoryPlayerProps> = ({
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 flex flex-col justify-center min-h-[380px] bg-radial from-neutral-900/40 via-neutral-950 to-neutral-950">
           {/* CHAPTER 1: GENESIS / BOOT-UP */}
           {currentChapter.id === 'genesis' && (
-            <div className="max-w-2xl mx-auto w-full space-y-6 text-left animate-fadeIn">
-              <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-mono">
-                <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                <span>REPO_INITIALIZATION_SEQUENCE</span>
-              </div>
-
-              <div className="space-y-2">
-                <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white font-mono">
-                  {repository.owner.login}/<span className="text-emerald-400">{repository.name}</span>
-                </h1>
-                <p className="text-sm text-neutral-400 leading-relaxed max-w-xl">
-                  {repository.description || 'Public GitHub repository repository development chronicle.'}
-                </p>
-              </div>
-
-              {/* Inception Metrics */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 font-mono">
-                <div className="p-3.5 rounded-lg bg-neutral-900/80 border border-neutral-800">
-                  <div className="text-[11px] text-neutral-400 flex items-center gap-1.5">
-                    <Calendar className="w-3 h-3 text-neutral-400" />
-                    <span>Inception</span>
-                  </div>
-                  <div className="text-sm font-semibold text-neutral-100 mt-1 truncate">
-                    {formattedCreationDate}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">{daysActive} days active</div>
+            <div className="max-w-4xl mx-auto w-full space-y-6 text-left animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-mono">
+                  <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>REPO_INITIALIZATION_SEQUENCE</span>
                 </div>
-
-                <div className="p-3.5 rounded-lg bg-neutral-900/80 border border-neutral-800">
-                  <div className="text-[11px] text-neutral-400 flex items-center gap-1.5">
-                    <GitCommit className="w-3 h-3 text-neutral-400" />
-                    <span>Default Branch</span>
-                  </div>
-                  <div className="text-sm font-semibold text-neutral-100 mt-1 truncate">
-                    {repository.defaultBranch}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Primary stream</div>
-                </div>
-
-                <div className="p-3.5 rounded-lg bg-neutral-900/80 border border-neutral-800">
-                  <div className="text-[11px] text-neutral-400 flex items-center gap-1.5">
-                    <Code className="w-3 h-3 text-neutral-400" />
-                    <span>Language</span>
-                  </div>
-                  <div className="text-sm font-semibold text-emerald-400 mt-1 truncate">
-                    {repository.language || 'Multi-language'}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Primary ecosystem</div>
-                </div>
-
-                <div className="p-3.5 rounded-lg bg-neutral-900/80 border border-neutral-800">
-                  <div className="text-[11px] text-neutral-400 flex items-center gap-1.5">
-                    <Users className="w-3 h-3 text-neutral-400" />
-                    <span>Commits</span>
-                  </div>
-                  <div className="text-sm font-semibold text-neutral-100 mt-1">
-                    {activity?.totalCommits || commits.length}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Total recorded</div>
+                <div className="text-[11px] text-neutral-500 font-mono hidden sm:inline">
+                  $ ./gitstory.sh --boot --live
                 </div>
               </div>
 
-              {/* Initial Commit Teaser */}
-              {chronologicalCommits[0] && (
-                <div className="p-4 rounded-lg border border-neutral-800 bg-neutral-900/50 font-mono text-xs space-y-1.5">
-                  <div className="text-neutral-400 flex items-center justify-between text-[11px]">
-                    <span>Initial Genesis Commit</span>
-                    <span>{chronologicalCommits[0].shortSha}</span>
-                  </div>
-                  <div className="text-neutral-200 font-medium truncate">
-                    &quot;{chronologicalCommits[0].message}&quot;
-                  </div>
-                  <div className="text-neutral-400 text-[11px]">
-                    Authored by @{chronologicalCommits[0].author.login || chronologicalCommits[0].author.name}
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                {/* Left: Dynamic 60fps Vector Particle Morphing Constellation */}
+                <div className="md:col-span-5 h-64 sm:h-72 rounded-xl border border-neutral-800 bg-neutral-950/80 p-2 flex items-center justify-center relative overflow-hidden shadow-xl">
+                  <ParticleMorphCanvas initialShape="code" accentColor="#10b981" className="w-full h-full" />
                 </div>
-              )}
+
+                {/* Right: Retro Terminal System Info & Inception Details */}
+                <div className="md:col-span-7 space-y-4">
+                  <div className="space-y-1.5">
+                    <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-mono">
+                      {repository.owner.login}/<span className="text-emerald-400">{repository.name}</span>
+                    </h1>
+                    <p className="text-xs text-neutral-400 leading-relaxed line-clamp-2">
+                      {repository.description || 'Public GitHub repository repository development chronicle.'}
+                    </p>
+                  </div>
+
+                  {/* Terminal System Info Block */}
+                  <div className="p-3.5 rounded-lg border border-neutral-800 bg-neutral-900/70 font-mono text-xs space-y-2">
+                    <div className="text-[11px] text-emerald-400 font-semibold border-b border-neutral-800 pb-1 flex items-center justify-between">
+                      <span>System Architecture Specs</span>
+                      <span className="text-neutral-500 font-normal">v1.0.0</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+                      <div>
+                        <span className="text-neutral-500">Inception: </span>
+                        <span className="text-neutral-200">{formattedCreationDate}</span>
+                      </div>
+                      <div>
+                        <span className="text-neutral-500">Age: </span>
+                        <span className="text-emerald-400">{daysActive} days</span>
+                      </div>
+                      <div>
+                        <span className="text-neutral-500">Default Branch: </span>
+                        <span className="text-neutral-200">{repository.defaultBranch}</span>
+                      </div>
+                      <div>
+                        <span className="text-neutral-500">Ecosystem: </span>
+                        <span className="text-neutral-200">{repository.language || 'Multi-stack'}</span>
+                      </div>
+                      <div>
+                        <span className="text-neutral-500">Commits: </span>
+                        <span className="text-neutral-200">{activity?.totalCommits || commits.length}</span>
+                      </div>
+                      <div>
+                        <span className="text-neutral-500">Stars / Forks: </span>
+                        <span className="text-neutral-200">{repository.starsCount} / {repository.forksCount}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Genesis Commit Teaser */}
+                  {chronologicalCommits[0] && (
+                    <div className="p-3 rounded-lg border border-neutral-800/80 bg-neutral-900/40 font-mono text-[11px] space-y-1">
+                      <div className="text-neutral-500 flex items-center justify-between">
+                        <span>Genesis Commit (git init)</span>
+                        <span className="text-emerald-400 font-bold">{chronologicalCommits[0].shortSha}</span>
+                      </div>
+                      <div className="text-neutral-200 truncate italic">
+                        &quot;{chronologicalCommits[0].message}&quot;
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -530,99 +548,131 @@ export const GitStoryPlayer: React.FC<GitStoryPlayerProps> = ({
             </div>
           )}
 
-          {/* CHAPTER 3: CHRONOLOGICAL COMMIT REEL */}
+          {/* CHAPTER 3: CHRONOLOGICAL COMMIT REEL & COMMIT-RUNNER */}
           {currentChapter.id === 'timeline' && (
-            <div className="max-w-3xl mx-auto w-full space-y-5 text-left animate-fadeIn">
-              <div className="flex items-center justify-between">
+            <div className="max-w-4xl mx-auto w-full space-y-4 text-left animate-fadeIn">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-mono">
                   <GitCommit className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>CHRONOLOGICAL_TIMELINE_PLAYBACK</span>
+                  <span>COMMIT_TIMELINE_STORY_ENGINE</span>
                 </div>
-                <span className="text-xs text-neutral-400 font-mono">
-                  Commit {commitIndex + 1} of {chronologicalCommits.length}
-                </span>
+
+                <div className="flex items-center space-x-2">
+                  <div className="inline-flex rounded border border-neutral-800 bg-neutral-900 p-0.5 text-xs font-mono">
+                    <button
+                      onClick={() => setTimelineMode('runner')}
+                      className={`px-2.5 py-1 rounded flex items-center space-x-1.5 transition ${
+                        timelineMode === 'runner'
+                          ? 'bg-neutral-800 text-white font-semibold'
+                          : 'text-neutral-400 hover:text-neutral-200'
+                      }`}
+                    >
+                      <Gamepad2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Commit-Runner</span>
+                    </button>
+                    <button
+                      onClick={() => setTimelineMode('cards')}
+                      className={`px-2.5 py-1 rounded flex items-center space-x-1.5 transition ${
+                        timelineMode === 'cards'
+                          ? 'bg-neutral-800 text-white font-semibold'
+                          : 'text-neutral-400 hover:text-neutral-200'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Cinematic Cards</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {currentCommit ? (
-                <div className="space-y-4">
-                  {/* Active Commit Card */}
-                  <div className="p-5 sm:p-6 rounded-xl border border-neutral-700 bg-neutral-900/90 shadow-xl space-y-4 font-mono transition-all">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3 text-xs">
-                      <div className="flex items-center space-x-2.5">
-                        {currentCommit.author.avatarUrl ? (
-                          <img
-                            src={currentCommit.author.avatarUrl}
-                            alt=""
-                            className="w-7 h-7 rounded border border-neutral-700 object-cover"
-                          />
-                        ) : (
-                          <div className="w-7 h-7 rounded bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-400 text-xs">
-                            @
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-semibold text-white">
-                            {currentCommit.author.name || currentCommit.author.login || 'Committer'}
-                          </div>
-                          {currentCommit.author.login && (
-                            <div className="text-[11px] text-neutral-400">
-                              @{currentCommit.author.login}
+              {timelineMode === 'runner' ? (
+                <CommitRunner
+                  commits={chronologicalCommits}
+                  defaultBranch={repository.defaultBranch}
+                  repoName={`${repository.owner.login}/${repository.name}`}
+                />
+              ) : (
+                currentCommit ? (
+                  <div className="space-y-4 font-mono">
+                    {/* Active Commit Card */}
+                    <div className="p-5 sm:p-6 rounded-xl border border-neutral-700 bg-neutral-900/90 shadow-xl space-y-4 transition-all">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3 text-xs">
+                        <div className="flex items-center space-x-2.5">
+                          {currentCommit.author.avatarUrl ? (
+                            <img
+                              src={currentCommit.author.avatarUrl}
+                              alt=""
+                              className="w-7 h-7 rounded border border-neutral-700 object-cover"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-400 text-xs">
+                              @
                             </div>
                           )}
+                          <div>
+                            <div className="font-semibold text-white">
+                              {currentCommit.author.name || currentCommit.author.login || 'Committer'}
+                            </div>
+                            {currentCommit.author.login && (
+                              <div className="text-[11px] text-neutral-400">
+                                @{currentCommit.author.login}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 text-[11px] text-neutral-400">
+                          <span>
+                            {currentCommit.author.date
+                              ? new Date(currentCommit.author.date).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })
+                              : ''}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-emerald-400 font-bold">
+                            {currentCommit.shortSha}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2.5 text-[11px] text-neutral-400">
-                        <span>
-                          {currentCommit.author.date
-                            ? new Date(currentCommit.author.date).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })
-                            : ''}
+                      {/* Commit Message */}
+                      <div className="text-sm sm:text-base text-neutral-100 font-medium leading-relaxed font-sans">
+                        &quot;{currentCommit.message}&quot;
+                      </div>
+
+                      {/* Commit Diff Impact / Metadata */}
+                      <div className="flex flex-wrap items-center gap-4 text-xs pt-1 text-neutral-400 border-t border-neutral-800/80">
+                        <span className="text-neutral-300">
+                          Author: <span className="text-white font-medium">{currentCommit.author.name || currentCommit.author.login || 'Unknown'}</span>
                         </span>
-                        <span className="px-2 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-emerald-400 font-bold">
-                          {currentCommit.shortSha}
-                        </span>
+                        {currentCommit.parentShas && currentCommit.parentShas.length > 0 ? (
+                          <span className="text-neutral-400">
+                            Parent: <code className="text-neutral-300 font-mono">{currentCommit.parentShas[0].slice(0, 7)}</code>
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400 font-semibold">Genesis Commit (Initial Tree)</span>
+                        )}
                       </div>
                     </div>
 
-                    {/* Commit Message */}
-                    <div className="text-sm sm:text-base text-neutral-100 font-medium leading-relaxed font-sans">
-                      &quot;{currentCommit.message}&quot;
-                    </div>
-
-                    {/* Commit Diff Impact / Metadata */}
-                    <div className="flex flex-wrap items-center gap-4 text-xs font-mono pt-1 text-neutral-400 border-t border-neutral-800/80">
-                      <span className="text-neutral-300">
-                        Author: <span className="text-white font-medium">{currentCommit.author.name || currentCommit.author.login || 'Unknown'}</span>
-                      </span>
-                      {currentCommit.parentShas && currentCommit.parentShas.length > 0 ? (
-                        <span className="text-neutral-400">
-                          Parent: <code className="text-neutral-300 font-mono">{currentCommit.parentShas[0].slice(0, 7)}</code>
-                        </span>
-                      ) : (
-                        <span className="text-emerald-400 font-semibold">Genesis Commit (Initial Tree)</span>
-                      )}
+                    {/* Pipeline Step Track */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[11px] text-neutral-400">
+                        <span>Timeline Progression</span>
+                        <span>{Math.round(chapterProgress * 100)}% through history</span>
+                      </div>
+                      <div className="h-2 w-full bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.max(2, chapterProgress * 100)}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
-
-                  {/* Pipeline Step Track */}
-                  <div className="space-y-1.5 font-mono">
-                    <div className="flex justify-between text-[11px] text-neutral-400">
-                      <span>Timeline Progression</span>
-                      <span>{Math.round(chapterProgress * 100)}% through history</span>
-                    </div>
-                    <div className="h-2 w-full bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
-                      <div
-                        className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                        style={{ width: `${Math.max(2, chapterProgress * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+                ) : null
+              )}
             </div>
           )}
 
