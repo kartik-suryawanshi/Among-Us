@@ -257,5 +257,46 @@ export async function getFrequentFiles(req, res, next) {
 
 export const getFrequentlyChangedFiles = getFrequentFiles;
 
+/**
+ * Controller to fetch unified repository analytics bundle (Stage 12).
+ * Aggregates metadata, languages, activity timeline, contributors, recent commits, and frequent files.
+ * Supports Redis caching and PostgreSQL snapshot persistence.
+ */
+export async function getAnalytics(req, res, next) {
+  try {
+    const { owner, repo, fullName } = req.repoTarget;
+    const cacheKey = buildCacheKey('analytics', fullName);
+
+    // 1. Check Redis Cache
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.status(200).json(cached);
+    }
+
+    // 2. Aggregate analytics bundle from GitHub
+    const analytics = await githubService.getCompleteAnalytics(owner, repo);
+
+    // 3. Persist to PostgreSQL asynchronously
+    if (analytics.repository) {
+      repositoryPersistenceService.upsertRepository(analytics.repository).catch(() => {});
+    }
+    repositoryPersistenceService
+      .saveAnalyticsSnapshot(fullName, 'full_analytics', analytics)
+      .catch(() => {});
+
+    // 4. Cache in Redis (300s TTL)
+    await setCache(cacheKey, analytics, 300);
+
+    res.setHeader('X-Cache', 'MISS');
+    return res.status(200).json(analytics);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export const getCompleteAnalytics = getAnalytics;
+
+
 
 

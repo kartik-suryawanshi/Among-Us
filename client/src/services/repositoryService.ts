@@ -6,6 +6,7 @@ import type { LanguageDistribution } from '../types/language';
 import type { FileHotspotsResponse } from '../types/hotspot';
 import type { CommitActivityResponse } from '../types/activity';
 import type { FrequentFilesResponse } from '../types/frequentFiles';
+import type { CompleteAnalyticsResponse } from '../types/analytics';
 
 export interface ParsedRepoTarget {
   owner: string;
@@ -143,5 +144,13 @@ export const repositoryService = {
     );
     return response.data;
   },
+
+  async getAnalytics(owner: string, repo: string): Promise<CompleteAnalyticsResponse> {
+    const response = await apiClient.get<CompleteAnalyticsResponse>(
+      `/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/analytics`
+    );
+    return response.data;
+  },
 };
+
 
