@@ -123,6 +123,33 @@ export class GitHubService {
       topics: Array.isArray(raw.topics) ? raw.topics : [],
     };
   }
+
+  /**
+   * Retrieves programming language breakdown and calculates distribution percentages.
+   * 
+   * @param {string} owner
+   * @param {string} repo
+   * @returns {Promise<{ totalBytes: number, languages: Array<{ language: string, bytes: number, percentage: number }>, raw: object }>}
+   */
+  async getLanguageStatistics(owner, repo) {
+    const raw = await this._fetchFromGitHub(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/languages`);
+
+    const totalBytes = Object.values(raw).reduce((sum, bytes) => sum + Number(bytes), 0);
+
+    const languages = Object.entries(raw)
+      .map(([language, bytes]) => ({
+        language,
+        bytes: Number(bytes),
+        percentage: totalBytes > 0 ? Number(((Number(bytes) / totalBytes) * 100).toFixed(2)) : 0,
+      }))
+      .sort((a, b) => b.bytes - a.bytes);
+
+    return {
+      totalBytes,
+      languages,
+      raw,
+    };
+  }
 }
 
 export const githubService = new GitHubService();
