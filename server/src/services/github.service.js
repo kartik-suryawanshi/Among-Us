@@ -280,6 +280,57 @@ export class GitHubService {
         : [],
     };
   }
+
+  /**
+   * Retrieves repository contributors and contribution counts.
+   * Handles empty repositories, anonymous contributors, and missing data gracefully.
+   * 
+   * @param {string} owner
+   * @param {string} repo
+   * @param {{ limit?: number, anon?: boolean }} options
+   * @returns {Promise<{ totalContributors: number, contributors: Array<object> }>}
+   */
+  async getContributors(owner, repo, options = {}) {
+    const limit = Math.min(100, Math.max(1, parseInt(options.limit || '30', 10)));
+    const anon = options.anon !== false;
+
+    let rawList;
+    try {
+      rawList = await this._fetchFromGitHub(
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contributors?per_page=${limit}&anon=${anon ? 'true' : 'false'}`
+      );
+    } catch (err) {
+      if (err.statusCode === 204 || err.statusCode === 409 || err.message?.includes('empty')) {
+        return {
+          totalContributors: 0,
+          contributors: [],
+        };
+      }
+      throw err;
+    }
+
+    if (!Array.isArray(rawList)) {
+      return {
+        totalContributors: 0,
+        contributors: [],
+      };
+    }
+
+    const contributors = rawList.map((item) => ({
+      login: item.login || null,
+      name: item.name || null,
+      email: item.email || null,
+      avatarUrl: item.avatar_url || null,
+      htmlUrl: item.html_url || (item.login ? `https://github.com/${item.login}` : null),
+      contributions: Number(item.contributions || 0),
+      type: item.type || (item.login ? 'User' : 'Anonymous'),
+    }));
+
+    return {
+      totalContributors: contributors.length,
+      contributors,
+    };
+  }
 }
 
 export const githubService = new GitHubService();

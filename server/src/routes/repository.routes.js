@@ -5,12 +5,16 @@ import {
   getLanguages,
   getCommits,
   getCommitDetail,
+  getContributors,
 } from '../controllers/repository.controller.js';
 
 const router = Router();
 
 // GET /api/repositories/:owner/:repo/languages AND /api/repos/:owner/:repo/languages
 router.get('/:owner/:repo/languages', validateRepoParams, getLanguages);
+
+// GET /api/repositories/:owner/:repo/contributors AND /api/repos/:owner/:repo/contributors
+router.get('/:owner/:repo/contributors', validateRepoParams, getContributors);
 
 // GET /api/repositories/:owner/:repo/commits AND /api/repos/:owner/:repo/commits
 router.get('/:owner/:repo/commits', validateRepoParams, getCommits);

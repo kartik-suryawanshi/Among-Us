@@ -70,4 +70,22 @@ export async function getCommitDetail(req, res, next) {
   }
 }
 
+/**
+ * Controller to fetch contributor statistics for a repository.
+ */
+export async function getContributors(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const { limit, anon } = req.query;
+    const result = await githubService.getContributors(owner, repo, {
+      limit,
+      anon: anon === 'false' ? false : true,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
 
