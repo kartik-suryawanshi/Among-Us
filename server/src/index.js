@@ -2,6 +2,7 @@ import 'dotenv/config';
 import app from './app.js';
 import { runMigrations } from './db/migrations.js';
 import { closePool } from './db/pool.js';
+import { closeRedis } from './cache/redis.js';
 
 const PORT = process.env.PORT || 4000;
 
@@ -18,7 +19,7 @@ const server = app.listen(PORT, () => {
 // Graceful shutdown handling
 process.on('SIGTERM', async () => {
   console.log('[GitStory Server] SIGTERM signal received: closing HTTP server');
-  await closePool();
+  await Promise.allSettled([closePool(), closeRedis()]);
   server.close(() => {
     console.log('[GitStory Server] HTTP server closed');
   });
@@ -26,7 +27,7 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   console.log('[GitStory Server] SIGINT signal received: closing HTTP server');
-  await closePool();
+  await Promise.allSettled([closePool(), closeRedis()]);
   server.close(() => {
     console.log('[GitStory Server] HTTP server closed');
   });
