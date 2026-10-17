@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import healthRoutes from './routes/health.routes.js';
+import repositoryRoutes from './routes/repository.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -29,6 +30,10 @@ app.use(express.json());
 // Base health routes (accessible at /api/health and /health)
 app.use('/api/health', healthRoutes);
 app.use('/health', healthRoutes);
+
+// Repository endpoints (supporting both frontend client and spec aliases)
+app.use('/api/repositories', repositoryRoutes);
+app.use('/api/repos', repositoryRoutes);
 
 // Catch-all 404 handler
 app.use(notFoundHandler);
