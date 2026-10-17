@@ -1,6 +1,11 @@
 import { apiClient } from './api';
 import type { Repository } from '../types/repository';
 import type { CommitDetail, PaginatedCommits } from '../types/commit';
+import type { ContributorStats } from '../types/contributor';
+import type { LanguageDistribution } from '../types/language';
+import type { FileHotspotsResponse } from '../types/hotspot';
+import type { CommitActivityResponse } from '../types/activity';
+import type { FrequentFilesResponse } from '../types/frequentFiles';
 
 export interface ParsedRepoTarget {
   owner: string;
@@ -83,6 +88,45 @@ export const repositoryService = {
     return response.data;
   },
 
+  async getActivity(owner: string, repo: string): Promise<CommitActivityResponse> {
+    const res = await apiClient.get<CommitActivityResponse>(
+      `/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/activity`
+    );
+    return res.data;
+  },
+
+  async getFrequentFiles(owner: string, repo: string, sampleCommits = 20): Promise<FrequentFilesResponse> {
+    const res = await apiClient.get<FrequentFilesResponse>(
+      `/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/frequent-files`,
+      {
+        params: { sample_commits: sampleCommits },
+      }
+    );
+    return res.data;
+  },
+
+  async getContributors(owner: string, repo: string): Promise<ContributorStats> {
+    const response = await apiClient.get<ContributorStats>(
+      `/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contributors`
+    );
+    return response.data;
+  },
+
+  async getLanguages(owner: string, repo: string): Promise<LanguageDistribution> {
+    const response = await apiClient.get<LanguageDistribution>(
+      `/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/languages`
+    );
+    return response.data;
+  },
+
+  async getFileHotspots(owner: string, repo: string, limit = 12): Promise<FileHotspotsResponse> {
+    const response = await apiClient.get<FileHotspotsResponse>(
+      `/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/hotspots`,
+      { params: { limit } }
+    );
+    return response.data;
+  },
+
   async getCommits(owner: string, repo: string, page = 1, perPage = 20): Promise<PaginatedCommits> {
     const response = await apiClient.get<PaginatedCommits>(
       `/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits`,
@@ -100,3 +144,4 @@ export const repositoryService = {
     return response.data;
   },
 };
+

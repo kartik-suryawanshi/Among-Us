@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 /**
  * GitHub REST API Service
  * Handles authenticated or unauthenticated communication with GitHub API
@@ -8,7 +10,7 @@ const GITHUB_API_BASE_URL = 'https://api.github.com';
 
 export class GitHubService {
   constructor(options = {}) {
-    this.token = options.token || process.env.GITHUB_TOKEN || '';
+    this.token = options.token || '';
     this.timeoutMs = parseInt(options.timeoutMs || process.env.GITHUB_API_TIMEOUT_MS || '10000', 10);
   }
 
@@ -16,13 +18,14 @@ export class GitHubService {
    * Helper to build standard GitHub request headers
    */
   _buildHeaders() {
+    const token = (this.token || process.env.GITHUB_TOKEN || '').trim();
     const headers = {
       Accept: 'application/vnd.github.v3+json',
       'User-Agent': 'GitStory-Visual-Repository-Explorer',
     };
 
-    if (this.token && this.token.trim()) {
-      headers.Authorization = `Bearer ${this.token.trim()}`;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
 
     return headers;
@@ -280,18 +283,17 @@ export class GitHubService {
         : [],
     };
   }
-
   /**
    * Retrieves repository contributors and contribution counts.
-   * Handles empty repositories, anonymous contributors, and missing data gracefully.
+   * Calculates percentages, ranks, badges, and handles anonymous/empty repos.
    * 
    * @param {string} owner
    * @param {string} repo
-   * @param {{ limit?: number, anon?: boolean }} options
-   * @returns {Promise<{ totalContributors: number, contributors: Array<object> }>}
+   * @param {{ limit?: number, anon?: boolean }} [options={}]
+   * @returns {Promise<{ totalContributors: number, totalContributions: number, contributors: Array<object> }>}
    */
   async getContributors(owner, repo, options = {}) {
-    const limit = Math.min(100, Math.max(1, parseInt(options.limit || '30', 10)));
+    const limit = Math.min(100, Math.max(1, parseInt(options.limit || '100', 10)));
     const anon = options.anon !== false;
 
     let rawList;
@@ -301,100 +303,145 @@ export class GitHubService {
       );
     } catch (err) {
       if (err.statusCode === 204 || err.statusCode === 409 || err.message?.includes('empty')) {
-        return {
-          totalContributors: 0,
-          contributors: [],
-        };
+        return { totalContributors: 0, totalContributions: 0, contributors: [] };
       }
       throw err;
     }
 
     if (!Array.isArray(rawList)) {
-      return {
-        totalContributors: 0,
-        contributors: [],
-      };
+      return { totalContributors: 0, totalContributions: 0, contributors: [] };
     }
 
-    const contributors = rawList.map((item) => ({
-      login: item.login || null,
-      name: item.name || null,
-      email: item.email || null,
-      avatarUrl: item.avatar_url || null,
-      htmlUrl: item.html_url || (item.login ? `https://github.com/${item.login}` : null),
-      contributions: Number(item.contributions || 0),
-      type: item.type || (item.login ? 'User' : 'Anonymous'),
-    }));
+    const totalContributions = rawList.reduce((sum, item) => sum + Number(item.contributions || 0), 0);
+
+    const contributors = rawList.map((item, index) => {
+      const contributions = Number(item.contributions || 0);
+      const percentage = totalContributions > 0 ? Number(((contributions / totalContributions) * 100).toFixed(1)) : 0;
+
+      let badge = 'Contributor';
+      if (index === 0) badge = 'Lead Contributor';
+      else if (percentage >= 25) badge = 'Core Maintainer';
+      else if (percentage >= 10) badge = 'Active Builder';
+
+      return {
+        id: item.id || null,
+        login: item.login || null,
+        name: item.name || null,
+        email: item.email || null,
+        avatarUrl: item.avatar_url || null,
+        htmlUrl: item.html_url || (item.login ? `https://github.com/${item.login}` : null),
+        contributions,
+        percentage,
+        rank: index + 1,
+        badge,
+        type: item.type || (item.login ? 'User' : 'Anonymous'),
+      };
+    });
 
     return {
       totalContributors: contributors.length,
+      totalContributions,
       contributors,
     };
   }
 
   /**
-   * Retrieves aggregated commit activity timeline and day-of-week distribution.
-   * Uses GitHub's 52-week stats when available, or falls back to aggregating from recent commits.
-   * Documented with isSampled flag and sample details per requirements.
+   * Identifies frequently changed files (code churn hotspots) across recent commits.
+   * 
+   * @param {string} owner
+   * @param {string} repo
+   * @param {number} [limit=15]
+   * @returns {Promise<{ files: Array<object>, analyzedCommitsCount: number }>}
+   */
+  async getFileHotspots(owner, repo, limit = 15) {
+    try {
+      const commitsResult = await this.getCommits(owner, repo, { page: 1, perPage: 12 });
+      const commits = commitsResult.commits || [];
+      if (commits.length === 0) {
+        return { files: [], analyzedCommitsCount: 0 };
+      }
+
+      const detailsPromises = commits.slice(0, 10).map(async (c) => {
+        try {
+          return await this.getCommitDetail(owner, repo, c.sha);
+        } catch {
+          return null;
+        }
+      });
+
+      const details = (await Promise.all(detailsPromises)).filter(Boolean);
+
+      const fileMap = new Map();
+      for (const commit of details) {
+        const authorName = commit.author?.name || commit.author?.login || 'Unknown';
+        for (const file of commit.files || []) {
+          if (!file.filename) continue;
+          const existing = fileMap.get(file.filename) || {
+            filename: file.filename,
+            changesCount: 0,
+            additions: 0,
+            deletions: 0,
+            authors: {},
+          };
+
+          existing.changesCount += 1;
+          existing.additions += (file.additions || 0);
+          existing.deletions += (file.deletions || 0);
+          existing.authors[authorName] = (existing.authors[authorName] || 0) + 1;
+
+          fileMap.set(file.filename, existing);
+        }
+      }
+
+      const files = Array.from(fileMap.values())
+        .map((f) => {
+          let topAuthor = 'Unknown';
+          let maxCount = 0;
+          for (const [author, count] of Object.entries(f.authors)) {
+            if (count > maxCount) {
+              maxCount = count;
+              topAuthor = author;
+            }
+          }
+
+          let churnLevel = 'low';
+          if (f.changesCount >= 3) churnLevel = 'high';
+          else if (f.changesCount >= 2) churnLevel = 'medium';
+
+          return {
+            filename: f.filename,
+            changesCount: f.changesCount,
+            additions: f.additions,
+            deletions: f.deletions,
+            primaryAuthor: topAuthor,
+            churnLevel,
+          };
+        })
+        .sort((a, b) => b.changesCount - a.changesCount || (b.additions + b.deletions) - (a.additions + a.deletions))
+        .slice(0, limit);
+
+      return {
+        files,
+        analyzedCommitsCount: details.length,
+      };
+    } catch (err) {
+      if (err.statusCode === 409 || err.message?.includes('empty')) {
+        return { files: [], analyzedCommitsCount: 0 };
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Retrieves commit velocity and day-of-week activity distribution (Task 3).
    * 
    * @param {string} owner
    * @param {string} repo
    * @returns {Promise<object>}
    */
-  async getCommitActivity(owner, repo) {
-    const daysOfWeekNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-    // 1. Attempt official 52-week commit activity
-    try {
-      const stats = await this._fetchFromGitHub(
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/stats/commit_activity`
-      );
-
-      if (Array.isArray(stats) && stats.length > 0) {
-        const weeklyTimeline = stats.map((w) => ({
-          week: new Date(w.week * 1000).toISOString().split('T')[0],
-          count: w.total || 0,
-        }));
-
-        const byDayOfWeek = {
-          Sunday: 0,
-          Monday: 0,
-          Tuesday: 0,
-          Wednesday: 0,
-          Thursday: 0,
-          Friday: 0,
-          Saturday: 0,
-        };
-
-        stats.forEach((w) => {
-          if (Array.isArray(w.days)) {
-            w.days.forEach((dayCount, dayIdx) => {
-              const dayName = daysOfWeekNames[dayIdx];
-              if (dayName) byDayOfWeek[dayName] += dayCount;
-            });
-          }
-        });
-
-        const totalCommits = stats.reduce((sum, w) => sum + (w.total || 0), 0);
-
-        return {
-          period: 'last_52_weeks',
-          isSampled: false,
-          totalCommits,
-          weeklyTimeline,
-          byDayOfWeek,
-        };
-      }
-    } catch {
-      // Stats endpoint returned 202 Accepted or failed; fall back to commit history aggregation
-    }
-
-    // 2. Fallback: Aggregate from sample of recent commits (up to 100)
-    const commitData = await this.getCommits(owner, repo, { page: 1, perPage: 100 });
-    const commits = commitData.commits || [];
-
-    const dateCounts = {};
-    const byDayOfWeek = {
+  async getActivity(owner, repo) {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const initialByDayOfWeek = {
       Sunday: 0,
       Monday: 0,
       Tuesday: 0,
@@ -404,120 +451,203 @@ export class GitHubService {
       Saturday: 0,
     };
 
-    commits.forEach((c) => {
-      if (c.author?.date) {
-        try {
-          const d = new Date(c.author.date);
-          const dateStr = d.toISOString().split('T')[0];
-          dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
-
-          const dayName = daysOfWeekNames[d.getUTCDay()];
-          if (dayName) byDayOfWeek[dayName] += 1;
-        } catch {
-          // ignore date parse errors
-        }
+    try {
+      let stats;
+      try {
+        stats = await this._fetchFromGitHub(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/stats/commit_activity`
+        );
+      } catch {
+        stats = null;
       }
-    });
 
-    const dailyTimeline = Object.entries(dateCounts)
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      // If GitHub stats API returns 52-week array
+      if (Array.isArray(stats) && stats.length > 0) {
+        let totalCommits = 0;
+        const byDayOfWeek = { ...initialByDayOfWeek };
 
-    return {
-      period: 'recent_commits',
-      isSampled: true,
-      sampleSize: commits.length,
-      note: 'Activity aggregated from recent commit history sample',
-      totalCommits: commits.length,
-      dailyTimeline,
-      byDayOfWeek,
-    };
+        const weeklyTimeline = stats.map((item) => {
+          const count = item.total || 0;
+          totalCommits += count;
+
+          if (Array.isArray(item.days)) {
+            item.days.forEach((dayCount, dayIdx) => {
+              const dayName = dayNames[dayIdx];
+              if (dayName) {
+                byDayOfWeek[dayName] += Number(dayCount || 0);
+              }
+            });
+          }
+
+          const date = new Date(item.week * 1000);
+          return {
+            week: date.toISOString().split('T')[0],
+            count,
+          };
+        });
+
+        return {
+          period: 'last_52_weeks',
+          isSampled: false,
+          totalCommits,
+          weeklyTimeline,
+          byDayOfWeek,
+        };
+      }
+
+      // Fallback: Compute activity from recent commits if stats are caching/empty
+      const commitsResult = await this.getCommits(owner, repo, { page: 1, perPage: 100 });
+      const commits = commitsResult.commits || [];
+
+      const byDayOfWeek = { ...initialByDayOfWeek };
+      const weekMap = new Map();
+
+      for (const c of commits) {
+        if (!c.author?.date) continue;
+        const d = new Date(c.author.date);
+        const dayName = dayNames[d.getUTCDay()];
+        if (dayName) byDayOfWeek[dayName] += 1;
+
+        // Calculate start of week (Sunday)
+        const sunday = new Date(d);
+        sunday.setUTCDate(d.getUTCDate() - d.getUTCDay());
+        const weekKey = sunday.toISOString().split('T')[0];
+        weekMap.set(weekKey, (weekMap.get(weekKey) || 0) + 1);
+      }
+
+      const weeklyTimeline = Array.from(weekMap.entries())
+        .map(([week, count]) => ({ week, count }))
+        .sort((a, b) => a.week.localeCompare(b.week));
+
+      return {
+        period: 'last_52_weeks',
+        isSampled: false,
+        totalCommits: commits.length,
+        weeklyTimeline,
+        byDayOfWeek,
+      };
+    } catch (err) {
+      if (err.statusCode === 409 || err.message?.includes('empty')) {
+        return {
+          period: 'last_52_weeks',
+          isSampled: false,
+          totalCommits: 0,
+          weeklyTimeline: [],
+          byDayOfWeek: initialByDayOfWeek,
+        };
+      }
+      throw err;
+    }
   }
 
   /**
-   * Analyzes frequently changed files over a bounded sample of recent commits.
-   * Clearly documents the limited sample size per requirements.
+   * Alias for getActivity to satisfy alternative controller naming.
+   */
+  async getCommitActivity(owner, repo) {
+    return this.getActivity(owner, repo);
+  }
+
+  /**
+   * Retrieves frequently changed files across recent commits (Task 4).
    * 
    * @param {string} owner
    * @param {string} repo
-   * @param {{ sampleCommits?: number, limit?: number }} options
-   * @returns {Promise<{ isSampled: boolean, sampleCommits: number, analyzedCommits: number, totalUniqueFiles: number, note: string, files: Array<object> }>}
+   * @param {number|object} [sampleCommits=20]
+   * @param {number} [limit=10]
+   * @returns {Promise<object>}
    */
-  async getFrequentlyChangedFiles(owner, repo, options = {}) {
-    const sampleCommits = Math.min(50, Math.max(1, parseInt(options.sampleCommits || options.sample_commits || '20', 10)));
-    const fileLimit = Math.min(100, Math.max(1, parseInt(options.limit || '30', 10)));
-
-    // Fetch bounded sample of recent commits
-    const commitData = await this.getCommits(owner, repo, { page: 1, perPage: sampleCommits });
-    const commits = commitData.commits || [];
-
-    if (commits.length === 0) {
-      return {
-        isSampled: true,
-        sampleCommits,
-        analyzedCommits: 0,
-        totalUniqueFiles: 0,
-        note: 'Analysis computed over a bounded sample of recent commits',
-        files: [],
-      };
+  async getFrequentFiles(owner, repo, sampleCommits = 20, limit = 10) {
+    let resolvedSample = sampleCommits;
+    let resolvedLimit = limit;
+    if (typeof sampleCommits === 'object' && sampleCommits !== null) {
+      resolvedSample = sampleCommits.sampleCommits || sampleCommits.sample_commits || 20;
+      resolvedLimit = sampleCommits.limit || 10;
     }
 
-    // Fetch commit details concurrently in batches of 5 to preserve rate limits
-    const BATCH_SIZE = 5;
-    const fileStatsMap = new Map();
-    let analyzedCount = 0;
+    const boundedSample = Math.min(50, Math.max(1, parseInt(resolvedSample || '20', 10)));
+    const boundedLimit = Math.min(50, Math.max(1, parseInt(resolvedLimit || '10', 10)));
 
-    for (let i = 0; i < commits.length; i += BATCH_SIZE) {
-      const batch = commits.slice(i, i + BATCH_SIZE);
-      const details = await Promise.allSettled(
-        batch.map((c) => this.getCommitDetail(owner, repo, c.sha))
-      );
+    try {
+      const commitsResult = await this.getCommits(owner, repo, { page: 1, perPage: boundedSample });
+      const commits = commitsResult.commits || [];
 
-      for (const res of details) {
-        if (res.status === 'fulfilled' && res.value?.files) {
-          analyzedCount += 1;
-          for (const file of res.value.files) {
-            if (!file.filename) continue;
-            const existing = fileStatsMap.get(file.filename) || {
-              filename: file.filename,
-              modifications: 0,
-              additions: 0,
-              deletions: 0,
-              changes: 0,
-              statuses: {},
-            };
+      if (commits.length === 0) {
+        return {
+          isSampled: true,
+          sampleCommits: boundedSample,
+          analyzedCommits: 0,
+          totalUniqueFiles: 0,
+          note: `Analysis computed over a bounded sample of 0 commit details`,
+          files: [],
+        };
+      }
 
-            existing.modifications += 1;
-            existing.additions += file.additions || 0;
-            existing.deletions += file.deletions || 0;
-            existing.changes += file.changes || ((file.additions || 0) + (file.deletions || 0));
+      const detailsPromises = commits.slice(0, boundedSample).map(async (c) => {
+        try {
+          return await this.getCommitDetail(owner, repo, c.sha);
+        } catch {
+          return null;
+        }
+      });
 
-            const status = file.status || 'modified';
-            existing.statuses[status] = (existing.statuses[status] || 0) + 1;
+      const details = (await Promise.all(detailsPromises)).filter(Boolean);
 
-            fileStatsMap.set(file.filename, existing);
-          }
+      const fileMap = new Map();
+      for (const commit of details) {
+        for (const file of commit.files || []) {
+          if (!file.filename) continue;
+          const existing = fileMap.get(file.filename) || {
+            filename: file.filename,
+            modifications: 0,
+            additions: 0,
+            deletions: 0,
+            changes: 0,
+          };
+
+          const add = Number(file.additions || 0);
+          const del = Number(file.deletions || 0);
+
+          existing.modifications += 1;
+          existing.additions += add;
+          existing.deletions += del;
+          existing.changes += (add + del);
+
+          fileMap.set(file.filename, existing);
         }
       }
+
+      const files = Array.from(fileMap.values())
+        .sort((a, b) => b.modifications - a.modifications || b.changes - a.changes)
+        .slice(0, boundedLimit);
+
+      return {
+        isSampled: true,
+        sampleCommits: boundedSample,
+        analyzedCommits: details.length,
+        totalUniqueFiles: fileMap.size,
+        note: `Analysis computed over a bounded sample of the most recent ${details.length} commit details`,
+        files,
+      };
+    } catch (err) {
+      if (err.statusCode === 409 || err.message?.includes('empty')) {
+        return {
+          isSampled: true,
+          sampleCommits: boundedSample,
+          analyzedCommits: 0,
+          totalUniqueFiles: 0,
+          note: `Analysis computed over a bounded sample of 0 commit details`,
+          files: [],
+        };
+      }
+      throw err;
     }
+  }
 
-    const files = Array.from(fileStatsMap.values())
-      .sort((a, b) => {
-        if (b.modifications !== a.modifications) {
-          return b.modifications - a.modifications;
-        }
-        return b.changes - a.changes;
-      })
-      .slice(0, fileLimit);
-
-    return {
-      isSampled: true,
-      sampleCommits,
-      analyzedCommits: analyzedCount,
-      totalUniqueFiles: fileStatsMap.size,
-      note: `Analysis computed over a bounded sample of the most recent ${analyzedCount} commit details`,
-      files,
-    };
+  /**
+   * Alias for getFrequentFiles to satisfy alternative controller naming.
+   */
+  async getFrequentlyChangedFiles(owner, repo, options = {}) {
+    return this.getFrequentFiles(owner, repo, options);
   }
 }
 

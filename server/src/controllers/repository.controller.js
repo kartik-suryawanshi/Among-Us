@@ -104,12 +104,26 @@ export async function getContributors(req, res, next) {
 }
 
 /**
- * Controller to fetch commit activity timeline and distribution.
+ * Controller to fetch frequently changed files (code churn hotspots).
  */
-export async function getCommitActivity(req, res, next) {
+export async function getFileHotspots(req, res, next) {
   try {
     const { owner, repo } = req.repoTarget;
-    const activity = await githubService.getCommitActivity(owner, repo);
+    const limit = parseInt(req.query.limit || '15', 10);
+    const hotspots = await githubService.getFileHotspots(owner, repo, limit);
+    return res.status(200).json(hotspots);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Controller to fetch commit velocity timeline and day-of-week distribution (Task 3).
+ */
+export async function getActivity(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const activity = await githubService.getActivity(owner, repo);
 
     // Persist snapshot to PostgreSQL in actual data flow
     repositoryPersistenceService
@@ -122,31 +136,29 @@ export async function getCommitActivity(req, res, next) {
   }
 }
 
+export const getCommitActivity = getActivity;
+
 /**
- * Controller to fetch frequently changed file analysis.
+ * Controller to fetch frequently changed files with additions/deletions (Task 4).
  */
-export async function getFrequentlyChangedFiles(req, res, next) {
+export async function getFrequentFiles(req, res, next) {
   try {
     const { owner, repo } = req.repoTarget;
-    const { sample_commits, limit } = req.query;
-    const result = await githubService.getFrequentlyChangedFiles(owner, repo, {
-      sampleCommits: sample_commits,
-      limit,
-    });
+    const sampleCommits = parseInt(req.query.sample_commits || '20', 10);
+    const limit = parseInt(req.query.limit || '10', 10);
+    const frequentFiles = await githubService.getFrequentFiles(owner, repo, sampleCommits, limit);
 
     // Persist snapshot to PostgreSQL in actual data flow
     repositoryPersistenceService
-      .saveAnalyticsSnapshot(req.repoTarget.fullName, 'frequent_files', result)
+      .saveAnalyticsSnapshot(req.repoTarget.fullName, 'frequent_files', frequentFiles)
       .catch(() => {});
 
-    return res.status(200).json(result);
+    return res.status(200).json(frequentFiles);
   } catch (err) {
     next(err);
   }
 }
 
-
-
-
+export const getFrequentlyChangedFiles = getFrequentFiles;
 
 
