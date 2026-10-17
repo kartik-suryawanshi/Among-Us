@@ -1,0 +1,12 @@
+{
+  "name": "gitstory-phase-1",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitStory Phase 1: Repository Explorer and Commit History",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "build": "cd server && npm run build && cd ../client && npm run build",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev"
+  }
+}
