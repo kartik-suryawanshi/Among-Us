@@ -461,7 +461,7 @@ export class GitHubService {
         stats = null;
       }
 
-      // If GitHub stats API returns 52-week array
+      // If GitHub stats API returns 52-week array and has actual activity
       if (Array.isArray(stats) && stats.length > 0) {
         let totalCommits = 0;
         const byDayOfWeek = { ...initialByDayOfWeek };
@@ -486,42 +486,77 @@ export class GitHubService {
           };
         });
 
+        if (totalCommits > 0) {
+          return {
+            period: 'last_52_weeks',
+            isSampled: false,
+            totalCommits,
+            weeklyTimeline,
+            byDayOfWeek,
+          };
+        }
+      }
+
+      // Fallback: Compute activity from real commits if stats API returned 0 / caching / empty
+      const commitsResult = await this.getCommits(owner, repo, { page: 1, perPage: 100 });
+      const commits = commitsResult.commits || [];
+
+      if (commits.length === 0) {
         return {
           period: 'last_52_weeks',
           isSampled: false,
-          totalCommits,
-          weeklyTimeline,
-          byDayOfWeek,
+          totalCommits: 0,
+          weeklyTimeline: [],
+          byDayOfWeek: initialByDayOfWeek,
         };
       }
-
-      // Fallback: Compute activity from recent commits if stats are caching/empty
-      const commitsResult = await this.getCommits(owner, repo, { page: 1, perPage: 100 });
-      const commits = commitsResult.commits || [];
 
       const byDayOfWeek = { ...initialByDayOfWeek };
       const weekMap = new Map();
 
       for (const c of commits) {
-        if (!c.author?.date) continue;
-        const d = new Date(c.author.date);
+        const commitDate = c.author?.date || c.committer?.date;
+        if (!commitDate) continue;
+        const d = new Date(commitDate);
+        if (isNaN(d.getTime())) continue;
+
         const dayName = dayNames[d.getUTCDay()];
         if (dayName) byDayOfWeek[dayName] += 1;
 
         // Calculate start of week (Sunday)
         const sunday = new Date(d);
         sunday.setUTCDate(d.getUTCDate() - d.getUTCDay());
+        sunday.setUTCHours(0, 0, 0, 0);
         const weekKey = sunday.toISOString().split('T')[0];
         weekMap.set(weekKey, (weekMap.get(weekKey) || 0) + 1);
       }
 
-      const weeklyTimeline = Array.from(weekMap.entries())
-        .map(([week, count]) => ({ week, count }))
-        .sort((a, b) => a.week.localeCompare(b.week));
+      // Generate a contiguous weekly timeline spanning the active commits
+      const sortedWeeks = Array.from(weekMap.keys()).sort();
+      const weeklyTimeline = [];
+
+      if (sortedWeeks.length > 0) {
+        const startDate = new Date(sortedWeeks[0]);
+        const endDate = new Date(sortedWeeks[sortedWeeks.length - 1]);
+
+        // Pad 2 weeks before and 2 weeks after so AreaChart draws a smooth curve
+        startDate.setUTCDate(startDate.getUTCDate() - 14);
+        endDate.setUTCDate(endDate.getUTCDate() + 14);
+
+        const curr = new Date(startDate);
+        while (curr <= endDate) {
+          const key = curr.toISOString().split('T')[0];
+          weeklyTimeline.push({
+            week: key,
+            count: weekMap.get(key) || 0,
+          });
+          curr.setUTCDate(curr.getUTCDate() + 7);
+        }
+      }
 
       return {
-        period: 'last_52_weeks',
-        isSampled: false,
+        period: 'all_time',
+        isSampled: commits.length >= 100,
         totalCommits: commits.length,
         weeklyTimeline,
         byDayOfWeek,

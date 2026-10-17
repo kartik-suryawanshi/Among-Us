@@ -65,7 +65,7 @@ export const CommitActivityTimeline: React.FC<CommitActivityTimelineProps> = ({
 
   // Calculate busiest day
   let busiestDay = 'N/A';
-  let maxDayCount = -1;
+  let maxDayCount = 0;
   dayData.forEach((d) => {
     if (d.count > maxDayCount) {
       maxDayCount = d.count;
@@ -84,13 +84,21 @@ export const CommitActivityTimeline: React.FC<CommitActivityTimelineProps> = ({
           </h2>
         </div>
         <div className="flex items-center gap-4 text-xs text-neutral-500 font-mono">
-          <span>{activity.totalCommits} commits (52 weeks)</span>
-          <span>Busiest: {busiestDay} ({maxDayCount > 0 ? maxDayCount : 0})</span>
+          <span>
+            {activity.totalCommits} {activity.totalCommits === 1 ? 'commit' : 'commits'}{' '}
+            {activity.period === 'all_time' ? '(all time)' : '(52 weeks)'}
+          </span>
+          <span>Busiest: {busiestDay} ({maxDayCount})</span>
         </div>
       </div>
 
-      {/* Grid: 52-week velocity chart + Day of week distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      {activity.totalCommits === 0 ? (
+        <div className="py-8 text-center text-xs text-neutral-400 font-mono">
+          No commit activity recorded for this repository.
+        </div>
+      ) : (
+        /* Grid: 52-week velocity chart + Day of week distribution */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Weekly Timeline AreaChart */}
         <div className="lg:col-span-8 space-y-2">
           <div className="text-xs font-medium text-neutral-600 flex items-center gap-1.5">
@@ -184,6 +192,7 @@ export const CommitActivityTimeline: React.FC<CommitActivityTimelineProps> = ({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
