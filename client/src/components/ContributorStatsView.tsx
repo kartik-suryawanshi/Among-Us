@@ -74,13 +74,18 @@ export const ContributorStatsView: React.FC<ContributorStatsViewProps> = ({
               'bg-neutral-300',
             ];
             const shadeClass = shades[i % shades.length];
+            const displayName = c.login ? `@${c.login}` : (c.name || 'Anonymous');
             return (
               <div
-                key={c.login}
-                className={`${shadeClass} transition-opacity hover:opacity-80 cursor-pointer`}
+                key={c.login || `bar-${c.id || i}`}
+                className={`${shadeClass} transition-opacity hover:opacity-80 ${c.login ? 'cursor-pointer' : ''}`}
                 style={{ width: `${Math.max(c.percentage, 2)}%` }}
-                title={`@${c.login}: ${c.contributions} commits (${c.percentage}%)`}
-                onClick={() => onSelectAuthor(selectedAuthorLogin === c.login ? null : c.login)}
+                title={`${displayName}: ${c.contributions} commits (${c.percentage}%)`}
+                onClick={() => {
+                  if (c.login) {
+                    onSelectAuthor(selectedAuthorLogin === c.login ? null : c.login);
+                  }
+                }}
               />
             );
           })}
@@ -90,13 +95,24 @@ export const ContributorStatsView: React.FC<ContributorStatsViewProps> = ({
       {/* Contributors Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {contributors.map((c, idx) => {
-          const isSelected = selectedAuthorLogin?.toLowerCase() === c.login.toLowerCase();
+          const isSelected = Boolean(
+            selectedAuthorLogin &&
+            c.login &&
+            selectedAuthorLogin.toLowerCase() === c.login.toLowerCase()
+          );
+          const displayName = c.login ? `@${c.login}` : (c.name || 'Anonymous');
 
           return (
             <div
-              key={c.login}
-              onClick={() => onSelectAuthor(isSelected ? null : c.login)}
-              className={`rounded-lg p-3.5 border transition cursor-pointer text-left ${
+              key={c.login || `contrib-card-${c.id || idx}`}
+              onClick={() => {
+                if (c.login) {
+                  onSelectAuthor(isSelected ? null : c.login);
+                }
+              }}
+              className={`rounded-lg p-3.5 border transition text-left ${
+                c.login ? 'cursor-pointer' : 'cursor-default'
+              } ${
                 isSelected
                   ? 'border-neutral-900 bg-neutral-50 shadow-xs'
                   : 'border-neutral-200 bg-white hover:border-neutral-300'
@@ -113,13 +129,13 @@ export const ContributorStatsView: React.FC<ContributorStatsViewProps> = ({
 
               <div className="flex items-center gap-2.5">
                 <img
-                  src={c.avatarUrl}
-                  alt={c.login}
+                  src={c.avatarUrl || 'https://github.com/ghost.png'}
+                  alt={displayName}
                   className="w-8 h-8 rounded border border-neutral-200 bg-neutral-100 object-cover shrink-0"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-medium text-neutral-900 truncate">
-                    @{c.login}
+                    {displayName}
                   </div>
                   <div className="text-[11px] text-neutral-500">
                     {c.contributions} {c.contributions === 1 ? 'commit' : 'commits'}

@@ -16,15 +16,18 @@ export const VisualTimeline: React.FC<VisualTimelineProps> = ({
   filteredAuthor,
 }) => {
   const displayedCommits = filteredAuthor
+
     ? commits.filter((c) => {
-        const login = c.author.login || c.committer.login || '';
-        const name = c.author.name || '';
+        const login = c.author?.login || c.committer?.login || '';
+        const name = c.author?.name || c.committer?.name || '';
+        const target = filteredAuthor.toLowerCase();
         return (
-          login.toLowerCase() === filteredAuthor.toLowerCase() ||
-          name.toLowerCase().includes(filteredAuthor.toLowerCase())
+          (login && login.toLowerCase() === target) ||
+          (name && name.toLowerCase().includes(target))
         );
       })
     : commits;
+
 
   if (displayedCommits.length === 0) {
     return (

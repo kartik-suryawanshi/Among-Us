@@ -208,14 +208,16 @@ export const RepositoryPage: React.FC = () => {
 
   const filteredCommits = selectedAuthorLogin
     ? commits.filter((c) => {
-        const login = c.author.login || c.committer.login || '';
-        const name = c.author.name || '';
+        const login = c.author?.login || c.committer?.login || '';
+        const name = c.author?.name || c.committer?.name || '';
+        const target = selectedAuthorLogin.toLowerCase();
         return (
-          login.toLowerCase() === selectedAuthorLogin.toLowerCase() ||
-          name.toLowerCase().includes(selectedAuthorLogin.toLowerCase())
+          (login && login.toLowerCase() === target) ||
+          (name && name.toLowerCase().includes(target))
         );
       })
     : commits;
+
 
   return (
     <div className="py-6 space-y-6">
