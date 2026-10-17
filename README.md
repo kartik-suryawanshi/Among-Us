@@ -21,7 +21,7 @@ GitStory is a visual explorer for public GitHub repositories. Enter a repository
 - **Live application:** https://among-us-gitstory.vercel.app/
 - **Backend API:** https://among-us-vgv3.onrender.com
 - **Source code:** https://github.com/kartik-suryawanshi/Among-Us
-- **Demo video:** [Add the final demo video link](https://youtu.be/placeholder)
+- **Demo video:** https://youtu.be/QmQcTqF3Ohc
 
 > The demo video URL above is a placeholder and should be replaced before submitting the project.
 
