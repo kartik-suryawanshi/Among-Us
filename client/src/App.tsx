@@ -6,6 +6,7 @@ import { RepositoryPage } from './pages/RepositoryPage';
 import { CommitPage } from './pages/CommitPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
+import { RepoChatbot } from './components/RepoChatbot';
 
 export const App: React.FC = () => {
   return (
@@ -59,9 +60,13 @@ export const App: React.FC = () => {
             </div>
           </div>
         </footer>
+
+        {/* Interactive Bottom-Corner Repository AI Assistant */}
+        <RepoChatbot />
       </div>
     </BrowserRouter>
   );
 };
+
 
 export default App;
