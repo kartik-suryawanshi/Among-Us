@@ -150,6 +150,136 @@ export class GitHubService {
       raw,
     };
   }
+
+  /**
+   * Retrieves paginated commit list from the default branch.
+   * Formats output to match PaginatedCommits interface expected by frontend.
+   * 
+   * @param {string} owner
+   * @param {string} repo
+   * @param {{ page?: number, perPage?: number }} options
+   * @returns {Promise<{ commits: Array<object>, page: number, perPage: number, hasMore: boolean }>}
+   */
+  async getCommits(owner, repo, options = {}) {
+    const page = Math.max(1, parseInt(options.page || '1', 10));
+    const perPage = Math.min(100, Math.max(1, parseInt(options.perPage || options.per_page || '20', 10)));
+
+    let rawList;
+    try {
+      rawList = await this._fetchFromGitHub(
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?page=${page}&per_page=${perPage}`
+      );
+    } catch (err) {
+      // GitHub returns 409 Conflict if repository is completely empty
+      if (err.statusCode === 409 || err.message?.includes('empty')) {
+        return {
+          commits: [],
+          page,
+          perPage,
+          hasMore: false,
+        };
+      }
+      throw err;
+    }
+
+    if (!Array.isArray(rawList)) {
+      return {
+        commits: [],
+        page,
+        perPage,
+        hasMore: false,
+      };
+    }
+
+    const commits = rawList.map((item) => ({
+      sha: item.sha,
+      shortSha: item.sha.substring(0, 7),
+      message: item.commit?.message || '',
+      author: {
+        name: item.commit?.author?.name || null,
+        email: item.commit?.author?.email || null,
+        date: item.commit?.author?.date || null,
+        login: item.author?.login || null,
+        avatarUrl: item.author?.avatar_url || null,
+        htmlUrl: item.author?.html_url || null,
+      },
+      committer: {
+        name: item.commit?.committer?.name || null,
+        email: item.commit?.committer?.email || null,
+        date: item.commit?.committer?.date || null,
+        login: item.committer?.login || null,
+        avatarUrl: item.committer?.avatar_url || null,
+        htmlUrl: item.committer?.html_url || null,
+      },
+      htmlUrl: item.html_url || `https://github.com/${owner}/${repo}/commit/${item.sha}`,
+      parentShas: Array.isArray(item.parents) ? item.parents.map((p) => p.sha) : [],
+    }));
+
+    return {
+      commits,
+      page,
+      perPage,
+      hasMore: commits.length >= perPage,
+    };
+  }
+
+  /**
+   * Retrieves single commit details including changed files and line stats.
+   * Formats output to match CommitDetail interface expected by frontend.
+   * 
+   * @param {string} owner
+   * @param {string} repo
+   * @param {string} sha
+   * @returns {Promise<object>}
+   */
+  async getCommitDetail(owner, repo, sha) {
+    const raw = await this._fetchFromGitHub(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(sha)}`
+    );
+
+    return {
+      sha: raw.sha,
+      shortSha: raw.sha.substring(0, 7),
+      message: raw.commit?.message || '',
+      author: {
+        name: raw.commit?.author?.name || null,
+        email: raw.commit?.author?.email || null,
+        date: raw.commit?.author?.date || null,
+        login: raw.author?.login || null,
+        avatarUrl: raw.author?.avatar_url || null,
+        htmlUrl: raw.author?.html_url || null,
+      },
+      committer: {
+        name: raw.commit?.committer?.name || null,
+        email: raw.commit?.committer?.email || null,
+        date: raw.commit?.committer?.date || null,
+        login: raw.committer?.login || null,
+        avatarUrl: raw.committer?.avatar_url || null,
+        htmlUrl: raw.committer?.html_url || null,
+      },
+      htmlUrl: raw.html_url || `https://github.com/${owner}/${repo}/commit/${raw.sha}`,
+      parentShas: Array.isArray(raw.parents) ? raw.parents.map((p) => p.sha) : [],
+      stats: raw.stats
+        ? {
+            total: raw.stats.total || 0,
+            additions: raw.stats.additions || 0,
+            deletions: raw.stats.deletions || 0,
+          }
+        : null,
+      files: Array.isArray(raw.files)
+        ? raw.files.map((file) => ({
+            filename: file.filename,
+            status: file.status || 'modified',
+            additions: file.additions || 0,
+            deletions: file.deletions || 0,
+            changes: file.changes || 0,
+            rawUrl: file.raw_url,
+            patch: file.patch,
+            previousFilename: file.previous_filename,
+          }))
+        : [],
+    };
+  }
 }
 
 export const githubService = new GitHubService();

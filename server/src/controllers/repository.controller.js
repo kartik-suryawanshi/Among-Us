@@ -34,3 +34,40 @@ export async function getLanguages(req, res, next) {
   }
 }
 
+/**
+ * Controller to fetch paginated commits list.
+ */
+export async function getCommits(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const { page, per_page } = req.query;
+    const result = await githubService.getCommits(owner, repo, { page, perPage: per_page });
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Controller to fetch details for a specific commit by SHA.
+ */
+export async function getCommitDetail(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const { sha } = req.params;
+
+    if (!sha || !/^[a-fA-F0-9]{4,40}$/.test(sha)) {
+      return res.status(400).json({
+        error: `Invalid commit SHA '${sha || ''}'. Must be 4 to 40 hexadecimal characters.`,
+        statusCode: 400,
+      });
+    }
+
+    const detail = await githubService.getCommitDetail(owner, repo, sha);
+    return res.status(200).json(detail);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
