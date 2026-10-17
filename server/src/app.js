@@ -28,9 +28,29 @@ app.use(
 
 app.use(express.json());
 
+// Root welcome endpoint for service inspection & live status
+app.get('/', (req, res) => {
+  res.status(200).json({
+    service: 'GitStory API',
+    status: 'online',
+    version: '1.0.0',
+    documentation: 'https://github.com/kartik-suryawanshi/Among-Us#readme',
+    endpoints: {
+      health: '/api/health',
+      analytics: '/api/repositories/:owner/:repo/analytics',
+      repository: '/api/repositories/:owner/:repo',
+      commits: '/api/repositories/:owner/:repo/commits',
+      contributors: '/api/repositories/:owner/:repo/contributors',
+      activity: '/api/repositories/:owner/:repo/activity',
+      languages: '/api/repositories/:owner/:repo/languages',
+    },
+  });
+});
+
 // Base health routes (accessible at /api/health and /health)
 app.use('/api/health', healthRoutes);
 app.use('/health', healthRoutes);
+
 
 // Repository endpoints (supporting both frontend client and spec aliases)
 app.use('/api/repositories', repositoryRoutes);
