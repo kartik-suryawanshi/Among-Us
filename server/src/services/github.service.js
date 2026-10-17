@@ -450,6 +450,15 @@ export class GitHubService {
       Friday: 0,
       Saturday: 0,
     };
+    const initialDayDates = {
+      Sunday: [],
+      Monday: [],
+      Tuesday: [],
+      Wednesday: [],
+      Thursday: [],
+      Friday: [],
+      Saturday: [],
+    };
 
     try {
       let stats;
@@ -465,6 +474,15 @@ export class GitHubService {
       if (Array.isArray(stats) && stats.length > 0) {
         let totalCommits = 0;
         const byDayOfWeek = { ...initialByDayOfWeek };
+        const dayDates = {
+          Sunday: [],
+          Monday: [],
+          Tuesday: [],
+          Wednesday: [],
+          Thursday: [],
+          Friday: [],
+          Saturday: [],
+        };
 
         const weeklyTimeline = stats.map((item) => {
           const count = item.total || 0;
@@ -474,7 +492,15 @@ export class GitHubService {
             item.days.forEach((dayCount, dayIdx) => {
               const dayName = dayNames[dayIdx];
               if (dayName) {
-                byDayOfWeek[dayName] += Number(dayCount || 0);
+                const c = Number(dayCount || 0);
+                byDayOfWeek[dayName] += c;
+                if (c > 0) {
+                  const dateObj = new Date((item.week + dayIdx * 86400) * 1000);
+                  const dateKey = dateObj.toISOString().split('T')[0];
+                  if (!dayDates[dayName].includes(dateKey)) {
+                    dayDates[dayName].push(dateKey);
+                  }
+                }
               }
             });
           }
@@ -493,6 +519,7 @@ export class GitHubService {
             totalCommits,
             weeklyTimeline,
             byDayOfWeek,
+            dayDates,
           };
         }
       }
@@ -508,10 +535,20 @@ export class GitHubService {
           totalCommits: 0,
           weeklyTimeline: [],
           byDayOfWeek: initialByDayOfWeek,
+          dayDates: initialDayDates,
         };
       }
 
       const byDayOfWeek = { ...initialByDayOfWeek };
+      const dayDates = {
+        Sunday: [],
+        Monday: [],
+        Tuesday: [],
+        Wednesday: [],
+        Thursday: [],
+        Friday: [],
+        Saturday: [],
+      };
       const weekMap = new Map();
 
       for (const c of commits) {
@@ -521,7 +558,13 @@ export class GitHubService {
         if (isNaN(d.getTime())) continue;
 
         const dayName = dayNames[d.getUTCDay()];
-        if (dayName) byDayOfWeek[dayName] += 1;
+        if (dayName) {
+          byDayOfWeek[dayName] += 1;
+          const dateKey = d.toISOString().split('T')[0];
+          if (!dayDates[dayName].includes(dateKey)) {
+            dayDates[dayName].push(dateKey);
+          }
+        }
 
         // Calculate start of week (Sunday)
         const sunday = new Date(d);
@@ -560,6 +603,7 @@ export class GitHubService {
         totalCommits: commits.length,
         weeklyTimeline,
         byDayOfWeek,
+        dayDates,
       };
     } catch (err) {
       if (err.statusCode === 409 || err.message?.includes('empty')) {

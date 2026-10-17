@@ -19,4 +19,5 @@ export interface CommitActivityResponse {
   totalCommits: number;
   weeklyTimeline: WeeklyActivity[];
   byDayOfWeek: DayOfWeekDistribution;
+  dayDates?: Record<keyof DayOfWeekDistribution, string[]>;
 }

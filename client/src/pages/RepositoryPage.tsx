@@ -263,6 +263,7 @@ export const RepositoryPage: React.FC = () => {
       {/* 3. Commit Activity Velocity Timeline (52-week & day-of-week) */}
       <CommitActivityTimeline
         activity={activity}
+        commits={commits}
         isLoading={isLoadingStats}
       />
 
