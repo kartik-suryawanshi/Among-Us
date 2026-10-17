@@ -1,12 +1,13 @@
 import React from 'react';
-import { Star, GitFork, ExternalLink, GitBranch, Calendar } from 'lucide-react';
+import { Star, GitFork, ExternalLink, GitBranch, Calendar, Play } from 'lucide-react';
 import type { Repository } from '../types/repository';
 
 interface RepositoryHeaderProps {
   repository: Repository;
+  onOpenStory?: () => void;
 }
 
-export const RepositoryHeader: React.FC<RepositoryHeaderProps> = ({ repository }) => {
+export const RepositoryHeader: React.FC<RepositoryHeaderProps> = ({ repository, onOpenStory }) => {
   const formatDate = (isoString: string): string => {
     try {
       const date = new Date(isoString);
@@ -65,6 +66,16 @@ export const RepositoryHeader: React.FC<RepositoryHeaderProps> = ({ repository }
         </div>
 
         <div className="flex items-center space-x-2 shrink-0">
+          {onOpenStory && (
+            <button
+              type="button"
+              onClick={onOpenStory}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-900 rounded transition-colors shadow-xs cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Play Story</span>
+            </button>
+          )}
           <a
             href={repository.htmlUrl}
             target="_blank"
