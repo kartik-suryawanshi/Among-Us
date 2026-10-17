@@ -15,8 +15,11 @@ const clientOrigins = process.env.CLIENT_URL
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
-      if (!origin || clientOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      // Allow requests with no origin, Vercel deployments, Render domains, localhost, or configured CLIENT_URL
+      const isAllowedDomain =
+        origin && (origin.endsWith('.vercel.app') || origin.endsWith('.onrender.com'));
+
+      if (!origin || isAllowedDomain || clientOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
         return callback(null, true);
       }
       return callback(new Error(`Origin ${origin} not allowed by CORS`));
@@ -25,6 +28,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
   })
 );
+
 
 app.use(express.json());
 

@@ -3,6 +3,10 @@
   "outputDirectory": "client/dist",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://among-us-vgv3.onrender.com/api/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
