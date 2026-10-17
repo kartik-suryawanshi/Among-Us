@@ -1,4 +1,5 @@
 import { githubService } from '../services/github.service.js';
+import { repositoryPersistenceService } from '../services/repositoryPersistence.service.js';
 
 /**
  * Controller to fetch repository overview metadata.
@@ -15,6 +16,9 @@ export async function getRepository(req, res, next) {
       metadata.languagesBreakdown = languages;
     }
 
+    // Persist to PostgreSQL asynchronously in actual data flow
+    repositoryPersistenceService.upsertRepository(metadata).catch(() => {});
+
     return res.status(200).json(metadata);
   } catch (err) {
     next(err);
@@ -28,6 +32,12 @@ export async function getLanguages(req, res, next) {
   try {
     const { owner, repo } = req.repoTarget;
     const languages = await githubService.getLanguageStatistics(owner, repo);
+
+    // Persist snapshot to PostgreSQL in actual data flow
+    repositoryPersistenceService
+      .saveAnalyticsSnapshot(req.repoTarget.fullName, 'languages', languages)
+      .catch(() => {});
+
     return res.status(200).json(languages);
   } catch (err) {
     next(err);
@@ -81,6 +91,12 @@ export async function getContributors(req, res, next) {
       limit,
       anon: anon === 'false' ? false : true,
     });
+
+    // Persist snapshot to PostgreSQL in actual data flow
+    repositoryPersistenceService
+      .saveAnalyticsSnapshot(req.repoTarget.fullName, 'contributors', result)
+      .catch(() => {});
+
     return res.status(200).json(result);
   } catch (err) {
     next(err);
@@ -94,6 +110,12 @@ export async function getCommitActivity(req, res, next) {
   try {
     const { owner, repo } = req.repoTarget;
     const activity = await githubService.getCommitActivity(owner, repo);
+
+    // Persist snapshot to PostgreSQL in actual data flow
+    repositoryPersistenceService
+      .saveAnalyticsSnapshot(req.repoTarget.fullName, 'activity', activity)
+      .catch(() => {});
+
     return res.status(200).json(activity);
   } catch (err) {
     next(err);
@@ -111,11 +133,18 @@ export async function getFrequentlyChangedFiles(req, res, next) {
       sampleCommits: sample_commits,
       limit,
     });
+
+    // Persist snapshot to PostgreSQL in actual data flow
+    repositoryPersistenceService
+      .saveAnalyticsSnapshot(req.repoTarget.fullName, 'frequent_files', result)
+      .catch(() => {});
+
     return res.status(200).json(result);
   } catch (err) {
     next(err);
   }
 }
+
 
 
 
