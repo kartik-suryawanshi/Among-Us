@@ -100,6 +100,24 @@ export async function getCommitActivity(req, res, next) {
   }
 }
 
+/**
+ * Controller to fetch frequently changed file analysis.
+ */
+export async function getFrequentlyChangedFiles(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const { sample_commits, limit } = req.query;
+    const result = await githubService.getFrequentlyChangedFiles(owner, repo, {
+      sampleCommits: sample_commits,
+      limit,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
 
 
 

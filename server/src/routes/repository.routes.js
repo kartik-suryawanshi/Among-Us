@@ -7,6 +7,7 @@ import {
   getCommitDetail,
   getContributors,
   getCommitActivity,
+  getFrequentlyChangedFiles,
 } from '../controllers/repository.controller.js';
 
 const router = Router();
@@ -19,6 +20,9 @@ router.get('/:owner/:repo/contributors', validateRepoParams, getContributors);
 
 // GET /api/repositories/:owner/:repo/activity AND /api/repos/:owner/:repo/activity
 router.get('/:owner/:repo/activity', validateRepoParams, getCommitActivity);
+
+// GET /api/repositories/:owner/:repo/frequent-files AND /api/repos/:owner/:repo/frequent-files
+router.get('/:owner/:repo/frequent-files', validateRepoParams, getFrequentlyChangedFiles);
 
 // GET /api/repositories/:owner/:repo/commits AND /api/repos/:owner/:repo/commits
 router.get('/:owner/:repo/commits', validateRepoParams, getCommits);

@@ -433,6 +433,92 @@ export class GitHubService {
       byDayOfWeek,
     };
   }
+
+  /**
+   * Analyzes frequently changed files over a bounded sample of recent commits.
+   * Clearly documents the limited sample size per requirements.
+   * 
+   * @param {string} owner
+   * @param {string} repo
+   * @param {{ sampleCommits?: number, limit?: number }} options
+   * @returns {Promise<{ isSampled: boolean, sampleCommits: number, analyzedCommits: number, totalUniqueFiles: number, note: string, files: Array<object> }>}
+   */
+  async getFrequentlyChangedFiles(owner, repo, options = {}) {
+    const sampleCommits = Math.min(50, Math.max(1, parseInt(options.sampleCommits || options.sample_commits || '20', 10)));
+    const fileLimit = Math.min(100, Math.max(1, parseInt(options.limit || '30', 10)));
+
+    // Fetch bounded sample of recent commits
+    const commitData = await this.getCommits(owner, repo, { page: 1, perPage: sampleCommits });
+    const commits = commitData.commits || [];
+
+    if (commits.length === 0) {
+      return {
+        isSampled: true,
+        sampleCommits,
+        analyzedCommits: 0,
+        totalUniqueFiles: 0,
+        note: 'Analysis computed over a bounded sample of recent commits',
+        files: [],
+      };
+    }
+
+    // Fetch commit details concurrently in batches of 5 to preserve rate limits
+    const BATCH_SIZE = 5;
+    const fileStatsMap = new Map();
+    let analyzedCount = 0;
+
+    for (let i = 0; i < commits.length; i += BATCH_SIZE) {
+      const batch = commits.slice(i, i + BATCH_SIZE);
+      const details = await Promise.allSettled(
+        batch.map((c) => this.getCommitDetail(owner, repo, c.sha))
+      );
+
+      for (const res of details) {
+        if (res.status === 'fulfilled' && res.value?.files) {
+          analyzedCount += 1;
+          for (const file of res.value.files) {
+            if (!file.filename) continue;
+            const existing = fileStatsMap.get(file.filename) || {
+              filename: file.filename,
+              modifications: 0,
+              additions: 0,
+              deletions: 0,
+              changes: 0,
+              statuses: {},
+            };
+
+            existing.modifications += 1;
+            existing.additions += file.additions || 0;
+            existing.deletions += file.deletions || 0;
+            existing.changes += file.changes || ((file.additions || 0) + (file.deletions || 0));
+
+            const status = file.status || 'modified';
+            existing.statuses[status] = (existing.statuses[status] || 0) + 1;
+
+            fileStatsMap.set(file.filename, existing);
+          }
+        }
+      }
+    }
+
+    const files = Array.from(fileStatsMap.values())
+      .sort((a, b) => {
+        if (b.modifications !== a.modifications) {
+          return b.modifications - a.modifications;
+        }
+        return b.changes - a.changes;
+      })
+      .slice(0, fileLimit);
+
+    return {
+      isSampled: true,
+      sampleCommits,
+      analyzedCommits: analyzedCount,
+      totalUniqueFiles: fileStatsMap.size,
+      note: `Analysis computed over a bounded sample of the most recent ${analyzedCount} commit details`,
+      files,
+    };
+  }
 }
 
 export const githubService = new GitHubService();
