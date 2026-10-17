@@ -9,9 +9,14 @@ import {
   getFileHotspots,
   getActivity,
   getFrequentFiles,
+  getAnalytics,
 } from '../controllers/repository.controller.js';
 
 const router = Router();
+
+// GET /api/repositories/:owner/:repo/analytics AND /api/repos/:owner/:repo/analytics (Stage 12)
+router.get('/:owner/:repo/analytics', validateRepoParams, getAnalytics);
+
 
 // GET /api/repositories/:owner/:repo/activity AND /api/repos/:owner/:repo/activity (Task 3)
 router.get('/:owner/:repo/activity', validateRepoParams, getActivity);

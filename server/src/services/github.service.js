@@ -49,16 +49,22 @@ export class GitHubService {
       const remaining = response.headers.get('x-ratelimit-remaining');
       const reset = response.headers.get('x-ratelimit-reset');
 
-      if (response.status === 403 || response.status === 429) {
-        if (remaining === '0') {
-          const resetDate = reset ? new Date(parseInt(reset, 10) * 1000).toISOString() : undefined;
-          const error = new Error('GitHub API rate limit exceeded. Please try again later or configure a GITHUB_TOKEN.');
-          error.statusCode = 429;
-          error.isRateLimit = true;
-          error.resetAt = resetDate;
-          throw error;
+      if (response.status === 429 || (response.status === 403 && remaining === '0')) {
+        let errorMsg = 'GitHub API rate limit exceeded. Please try again later or configure a GITHUB_TOKEN.';
+        try {
+          const errorData = await response.json();
+          if (errorData.message) errorMsg = errorData.message;
+        } catch {
+          // ignore json parse error
         }
+        const resetDate = reset ? new Date(parseInt(reset, 10) * 1000).toISOString() : undefined;
+        const error = new Error(errorMsg);
+        error.statusCode = 429;
+        error.isRateLimit = true;
+        error.resetAt = resetDate;
+        throw error;
       }
+
 
       if (response.status === 404) {
         const error = new Error('The requested GitHub repository was not found or is private.');
@@ -683,6 +689,92 @@ export class GitHubService {
    */
   async getFrequentlyChangedFiles(owner, repo, options = {}) {
     return this.getFrequentFiles(owner, repo, options);
+  }
+
+  /**
+   * Aggregates the full repository analytics bundle in a single resilient call.
+   * Runs sub-queries concurrently and formats output per spec:
+   * - repository overview metadata
+   * - programming language distribution
+   * - commit activity velocity & day-of-week breakdown
+   * - contributors statistics
+   * - recent commits list
+   * - frequently changed files analysis
+   * - partial data indicators and warnings
+   * 
+   * @param {string} owner
+   * @param {string} repo
+   * @returns {Promise<object>}
+   */
+  async getCompleteAnalytics(owner, repo) {
+    const warnings = [];
+
+    // Run all sub-queries concurrently
+    const [metaResult, langResult, activityResult, contribResult, commitsResult, frequentResult] =
+      await Promise.allSettled([
+        this.getRepositoryMetadata(owner, repo),
+        this.getLanguageStatistics(owner, repo),
+        this.getActivity(owner, repo),
+        this.getContributors(owner, repo, { limit: 20 }),
+        this.getCommits(owner, repo, { page: 1, perPage: 10 }),
+        this.getFrequentFiles(owner, repo, 20, 10),
+      ]);
+
+    // If repository metadata itself failed (e.g. 404 or invalid), rethrow
+    if (metaResult.status === 'rejected') {
+      throw metaResult.reason;
+    }
+
+    const repository = metaResult.value;
+
+    const languages = langResult.status === 'fulfilled'
+      ? langResult.value
+      : { totalBytes: 0, languages: [], raw: {} };
+    if (langResult.status === 'rejected') {
+      warnings.push(`Languages unavailable: ${langResult.reason?.message || 'Failed to fetch languages'}`);
+    }
+
+    const commitActivity = activityResult.status === 'fulfilled'
+      ? activityResult.value
+      : { period: 'unavailable', isSampled: true, totalCommits: 0, weeklyTimeline: [], byDayOfWeek: {} };
+    if (activityResult.status === 'rejected') {
+      warnings.push(`Commit activity unavailable: ${activityResult.reason?.message || 'Failed to fetch commit activity'}`);
+    }
+
+    const contributors = contribResult.status === 'fulfilled'
+      ? contribResult.value
+      : { totalContributors: 0, contributors: [] };
+    if (contribResult.status === 'rejected') {
+      warnings.push(`Contributors unavailable: ${contribResult.reason?.message || 'Failed to fetch contributors'}`);
+    }
+
+    const recentCommits = commitsResult.status === 'fulfilled'
+      ? commitsResult.value.commits || []
+      : [];
+    if (commitsResult.status === 'rejected') {
+      warnings.push(`Recent commits unavailable: ${commitsResult.reason?.message || 'Failed to fetch recent commits'}`);
+    }
+
+    const frequentlyChangedFiles = frequentResult.status === 'fulfilled'
+      ? frequentResult.value
+      : { isSampled: true, sampleCommits: 0, analyzedCommits: 0, totalUniqueFiles: 0, files: [] };
+    if (frequentResult.status === 'rejected') {
+      warnings.push(`Frequently changed files unavailable: ${frequentResult.reason?.message || 'Failed to analyze file changes'}`);
+    }
+
+    const isPartial = warnings.length > 0;
+
+    return {
+      repository,
+      languages,
+      commitActivity,
+      contributors,
+      recentCommits,
+      frequentlyChangedFiles,
+      isPartial,
+      warnings,
+      generatedAt: new Date().toISOString(),
+    };
   }
 }
 
