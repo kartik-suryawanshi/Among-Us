@@ -87,5 +87,19 @@ export async function getContributors(req, res, next) {
   }
 }
 
+/**
+ * Controller to fetch commit activity timeline and distribution.
+ */
+export async function getCommitActivity(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const activity = await githubService.getCommitActivity(owner, repo);
+    return res.status(200).json(activity);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
 
 

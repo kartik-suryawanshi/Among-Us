@@ -331,6 +331,108 @@ export class GitHubService {
       contributors,
     };
   }
+
+  /**
+   * Retrieves aggregated commit activity timeline and day-of-week distribution.
+   * Uses GitHub's 52-week stats when available, or falls back to aggregating from recent commits.
+   * Documented with isSampled flag and sample details per requirements.
+   * 
+   * @param {string} owner
+   * @param {string} repo
+   * @returns {Promise<object>}
+   */
+  async getCommitActivity(owner, repo) {
+    const daysOfWeekNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    // 1. Attempt official 52-week commit activity
+    try {
+      const stats = await this._fetchFromGitHub(
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/stats/commit_activity`
+      );
+
+      if (Array.isArray(stats) && stats.length > 0) {
+        const weeklyTimeline = stats.map((w) => ({
+          week: new Date(w.week * 1000).toISOString().split('T')[0],
+          count: w.total || 0,
+        }));
+
+        const byDayOfWeek = {
+          Sunday: 0,
+          Monday: 0,
+          Tuesday: 0,
+          Wednesday: 0,
+          Thursday: 0,
+          Friday: 0,
+          Saturday: 0,
+        };
+
+        stats.forEach((w) => {
+          if (Array.isArray(w.days)) {
+            w.days.forEach((dayCount, dayIdx) => {
+              const dayName = daysOfWeekNames[dayIdx];
+              if (dayName) byDayOfWeek[dayName] += dayCount;
+            });
+          }
+        });
+
+        const totalCommits = stats.reduce((sum, w) => sum + (w.total || 0), 0);
+
+        return {
+          period: 'last_52_weeks',
+          isSampled: false,
+          totalCommits,
+          weeklyTimeline,
+          byDayOfWeek,
+        };
+      }
+    } catch {
+      // Stats endpoint returned 202 Accepted or failed; fall back to commit history aggregation
+    }
+
+    // 2. Fallback: Aggregate from sample of recent commits (up to 100)
+    const commitData = await this.getCommits(owner, repo, { page: 1, perPage: 100 });
+    const commits = commitData.commits || [];
+
+    const dateCounts = {};
+    const byDayOfWeek = {
+      Sunday: 0,
+      Monday: 0,
+      Tuesday: 0,
+      Wednesday: 0,
+      Thursday: 0,
+      Friday: 0,
+      Saturday: 0,
+    };
+
+    commits.forEach((c) => {
+      if (c.author?.date) {
+        try {
+          const d = new Date(c.author.date);
+          const dateStr = d.toISOString().split('T')[0];
+          dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+
+          const dayName = daysOfWeekNames[d.getUTCDay()];
+          if (dayName) byDayOfWeek[dayName] += 1;
+        } catch {
+          // ignore date parse errors
+        }
+      }
+    });
+
+    const dailyTimeline = Object.entries(dateCounts)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      period: 'recent_commits',
+      isSampled: true,
+      sampleSize: commits.length,
+      note: 'Activity aggregated from recent commit history sample',
+      totalCommits: commits.length,
+      dailyTimeline,
+      byDayOfWeek,
+    };
+  }
 }
 
 export const githubService = new GitHubService();
