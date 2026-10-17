@@ -70,4 +70,60 @@ export async function getCommitDetail(req, res, next) {
   }
 }
 
+/**
+ * Controller to fetch contributor statistics for a repository.
+ */
+export async function getContributors(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const contributors = await githubService.getContributors(owner, repo);
+    return res.status(200).json(contributors);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Controller to fetch frequently changed files (code churn hotspots).
+ */
+export async function getFileHotspots(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const limit = parseInt(req.query.limit || '15', 10);
+    const hotspots = await githubService.getFileHotspots(owner, repo, limit);
+    return res.status(200).json(hotspots);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Controller to fetch commit velocity timeline and day-of-week distribution (Task 3).
+ */
+export async function getActivity(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const activity = await githubService.getActivity(owner, repo);
+    return res.status(200).json(activity);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Controller to fetch frequently changed files with additions/deletions (Task 4).
+ */
+export async function getFrequentFiles(req, res, next) {
+  try {
+    const { owner, repo } = req.repoTarget;
+    const sampleCommits = parseInt(req.query.sample_commits || '20', 10);
+    const limit = parseInt(req.query.limit || '10', 10);
+    const frequentFiles = await githubService.getFrequentFiles(owner, repo, sampleCommits, limit);
+    return res.status(200).json(frequentFiles);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
 

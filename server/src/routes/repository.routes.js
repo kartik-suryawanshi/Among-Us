@@ -5,9 +5,25 @@ import {
   getLanguages,
   getCommits,
   getCommitDetail,
+  getContributors,
+  getFileHotspots,
+  getActivity,
+  getFrequentFiles,
 } from '../controllers/repository.controller.js';
 
 const router = Router();
+
+// GET /api/repositories/:owner/:repo/activity AND /api/repos/:owner/:repo/activity (Task 3)
+router.get('/:owner/:repo/activity', validateRepoParams, getActivity);
+
+// GET /api/repositories/:owner/:repo/frequent-files AND /api/repos/:owner/:repo/frequent-files (Task 4)
+router.get('/:owner/:repo/frequent-files', validateRepoParams, getFrequentFiles);
+
+// GET /api/repositories/:owner/:repo/contributors AND /api/repos/:owner/:repo/contributors
+router.get('/:owner/:repo/contributors', validateRepoParams, getContributors);
+
+// GET /api/repositories/:owner/:repo/hotspots AND /api/repos/:owner/:repo/hotspots
+router.get('/:owner/:repo/hotspots', validateRepoParams, getFileHotspots);
 
 // GET /api/repositories/:owner/:repo/languages AND /api/repos/:owner/:repo/languages
 router.get('/:owner/:repo/languages', validateRepoParams, getLanguages);
